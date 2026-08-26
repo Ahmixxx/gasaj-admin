@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GASAJ · Admin Panel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050807; color: #e8f2e8;
+    font-family: 'Courier New', monospace;
+    padding: 16px; min-height: 100vh;
+  }
+  h1 { color: #00e840; font-size: 20px; letter-spacing: 4px; margin-bottom: 4px; }
+  .sub { color: #4a6a4a; font-size: 11px; margin-bottom: 20px; }
+
+  .card {
+    background: #0e1610; border: 1px solid #1a2a1a; border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .card h2 { color: #00e840; font-size: 13px; letter-spacing: 2px; margin-bottom: 12px; }
+
+  label { display: block; font-size: 11px; color: #7aaa7a; margin-bottom: 4px; margin-top: 10px; }
+  input {
+    width: 100%; background: #0a0e0a; border: 1px solid #1a2a1a; border-radius: 6px;
+    color: #e8f2e8; padding: 10px 12px; font-size: 13px; font-family: inherit; outline: none;
+  }
+  input:focus { border-color: #00e840; }
+
+  button {
+    background: #00e840; color: #000; border: none; border-radius: 6px;
+    padding: 12px; font-size: 13px; font-weight: bold; letter-spacing: 1px;
+    cursor: pointer; margin-top: 14px; width: 100%; font-family: inherit;
+  }
+  button:active { transform: scale(0.98); }
+  button.secondary { background: #1a2a1a; color: #00e840; border: 1px solid #00e840; }
+  button.danger { background: #2a0808; color: #ff6060; border: 1px solid #e84040; }
+
+  .result {
+    margin-top: 12px; padding: 12px; background: #050807; border-radius: 6px;
+    border: 1px solid #1a2a1a; font-size: 12px; word-break: break-all; white-space: pre-wrap;
+    display: none;
+  }
+  .result.show { display: block; }
+  .result.ok { border-color: #00e840; color: #00e840; }
+  .result.err { border-color: #e84040; color: #ff6060; }
+
+  .lic-item {
+    background: #0a0e0a; border: 1px solid #1a2a1a; border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 8px; font-size: 11px;
+  }
+  .lic-code { color: #00e840; font-weight: bold; font-size: 13px; }
+  .lic-row { display: flex; justify-content: space-between; margin-top: 4px; color: #7aaa7a; }
+  .lic-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .lic-actions button { margin-top: 0; padding: 6px; font-size: 10px; }
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 9px; }
+  .badge.active { background: #0a2a0a; color: #00e840; }
+  .badge.inactive { background: #2a0a0a; color: #e84040; }
+</style>
+</head>
+<body>
+
+<h1>◈ GASAJ ADMIN</h1>
+<div class="sub">Upravljanje licencama</div>
+
+<div class="card">
+  <h2>POSTAVKE SERVERA</h2>
+  <label>Backend URL</label>
+  <input id="serverUrl" value="https://code-ekot.onrender.com" />
+  <label>Admin ključ</label>
+  <input id="adminKey" type="password" placeholder="tvoj ADMIN_KEY" />
+</div>
+
+<div class="card">
+  <h2>NAPRAVI NOVU LICENCU</h2>
+  <label>Ime kupca (opciono)</label>
+  <input id="custName" placeholder="npr. Ahmed" />
+  <label>Trajanje (dana)</label>
+  <input id="custDays" type="number" value="30" />
+  <button onclick="createLicense()">◈ NAPRAVI LICENCU</button>
+  <div id="createResult" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>SVE LICENCE</h2>
+  <button class="secondary" onclick="loadLicenses()">↻ OSVJEŽI LISTU</button>
+  <div id="licenseList" style="margin-top:12px"></div>
+</div>
+
+<script>
+function getUrl() { return document.getElementById("serverUrl").value.trim().replace(/\/$/, ""); }
+function getKey() { return document.getElementById("adminKey").value.trim(); }
+
+async function createLicense() {
+  const url = getUrl(), key = getKey();
+  const ime = document.getElementById("custName").value.trim();
+  const dana = parseInt(document.getElementById("custDays").value) || 30;
+  const resEl = document.getElementById("createResult");
+  resEl.className = "result show";
+  resEl.textContent = "Pravim licencu...";
+
+  try {
+    const r = await fetch(url + "/api/admin/licenses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": key },
+      body: JSON.stringify({ ime: ime || null, trajanjeDana: dana })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Greška");
+    resEl.className = "result show ok";
+    resEl.textContent = "✓ LICENCA NAPRAVLJENA:\n\n" + data.licenseKey + "\n\nOvo pošalji kupcu.";
+    loadLicenses();
+  } catch (e) {
+    resEl.className = "result show err";
+    resEl.textContent = "✗ Greška: " + e.message;
+  }
+}
+
+async function loadLicenses() {
+  const url = getUrl(), key = getKey();
+  const listEl = document.getElementById("licenseList");
+  listEl.innerHTML = "Učitavam...";
+  try {
+    const r = await fetch(url + "/api/admin/licenses", {
+      headers: { "X-Admin-Key": key }
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "Greška");
+    if (data.licence.length === 0) { listEl.innerHTML = "<div style='color:#4a6a4a'>Još nema licenci.</div>"; return; }
+
+    listEl.innerHTML = data.licence.map(l => `
+      <div class="lic-item">
+        <div class="lic-code">${l.key}</div>
+        <div class="lic-row"><span>${l.ime || "bez imena"}</span>
+          <span class="badge ${l.active ? "active" : "inactive"}">${l.active ? "AKTIVNA" : "UGAŠENA"}</span>
+        </div>
+        <div class="lic-row"><span>Poruke: ${l.messageCount || 0}</span>
+          <span>Ističe: ${l.expiresAt ? new Date(l.expiresAt).toLocaleDateString("bs") : "nikad"}</span>
+        </div>
+        <div class="lic-actions">
+          ${l.active
+            ? `<button class="danger" onclick="toggleLicense('${l.key}', false)">UGASI</button>`
+            : `<button class="secondary" onclick="toggleLicense('${l.key}', true)">UPALI</button>`}
+          <button class="secondary" onclick="extendLicense('${l.key}')">+30 DANA</button>
+        </div>
+      </div>
+    `).join("");
+  } catch (e) {
+    listEl.innerHTML = "<div style='color:#ff6060'>Greška: " + e.message + "</div>";
+  }
+}
+
+async function toggleLicense(key, activate) {
+  const url = getUrl(), adminKey = getKey();
+  const endpoint = activate ? "activate" : "deactivate";
+  try {
+    await fetch(`${url}/api/admin/licenses/${key}/${endpoint}`, {
+      method: "POST", headers: { "X-Admin-Key": adminKey }
+    });
+    loadLicenses();
+  } catch (e) { alert("Greška: " + e.message); }
+}
+
+async function extendLicense(key) {
+  const url = getUrl(), adminKey = getKey();
+  try {
+    await fetch(`${url}/api/admin/licenses/${key}/extend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Key": adminKey },
+      body: JSON.stringify({ dodatnihDana: 30 })
+    });
+    loadLicenses();
+  } catch (e) { alert("Greška: " + e.message); }
+}
+</script>
+</body>
+</html>
